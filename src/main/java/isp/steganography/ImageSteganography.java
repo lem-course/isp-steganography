@@ -16,16 +16,22 @@ import javax.imageio.ImageIO;
  * - E5. Use encryption (e.g. AES) to provide bits secrecy
  * - E6. Use HMAC to provide bits authenticity and data integrity
  */
-public class Steganography {
+public class ImageSteganography {
 
     protected String inFile;
     protected String outFile;
 
-    public Steganography(final String inFile, final String outFile) {
+    public ImageSteganography(final String inFile, final String outFile) {
         this.inFile = inFile;
         this.outFile = outFile;
     }
 
+    /**
+     * Converts an array of bytes it into an array of bits (booleans)
+     *
+     * @param bytes
+     * @return
+     */
     protected boolean[] getBits(final byte[] bytes) {
         final boolean[] bits = new boolean[bytes.length * 8];
 
@@ -39,26 +45,40 @@ public class Steganography {
         return bits;
     }
 
+    /**
+     * Loads a file from given name and returns an instance of the BufferedImage
+     * <p/>
+     * The file has to be located in src/main/resources directory.
+     *
+     * @param inFile
+     * @return
+     * @throws IOException If file does not exist
+     */
     protected BufferedImage loadFile(final String inFile) throws IOException {
-        return ImageIO.read(Steganography.class.getResource(inFile));
+        return ImageIO.read(ImageSteganography.class.getResource(inFile));
     }
 
-    protected BufferedImage encode(final String file, final boolean[] message) throws IOException {
-        final BufferedImage image = loadFile(file);
-
-        for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < message.length; i++) {
-            for (int j = image.getMinY(); j < image.getHeight() && bitCounter < message.length; j++) {
+    /**
+     * Encodes given array of bits into given image. The algorithm modifies the
+     * least significant bit in the red component of each image pixel.
+     *
+     * @param payload The array of bits
+     * @param image   The image onto which the payload is to be encoded
+     */
+    private final void encode(final boolean[] payload, final BufferedImage image) {
+        for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < payload.length; i++) {
+            for (int j = image.getMinY(); j < image.getHeight() && bitCounter < payload.length; j++) {
                 final Color original = new Color(image.getRGB(i, j));
 
                 // Let's modify the red component only
-                final int newRed = message[bitCounter] ?
+                final int newRed = payload[bitCounter] ?
                         original.getRed() | 0x01 : // sets LSB to 1
                         original.getRed() & 0xfe;  // sets LSB to 0
 
-                // Create a new color
+                // Create a new color object
                 final Color modified = new Color(newRed, original.getGreen(), original.getBlue());
 
-                // Replace the current pixel with new one
+                // Replace the current pixel with the new color
                 image.setRGB(i, j, modified.getRGB());
 
                 System.out.printf("%03d bit [%d, %d]: %s -> %s%n", bitCounter, i, j, original, modified);
@@ -66,8 +86,6 @@ public class Steganography {
                 bitCounter++;
             }
         }
-
-        return image;
     }
 
     public void encode(final byte[] payload) throws IOException {
@@ -75,14 +93,17 @@ public class Steganography {
         final boolean[] bits = getBits(payload);
 
         // encode the bits into image
-        final BufferedImage image = encode(inFile, bits);
+        final BufferedImage image = loadFile(inFile);
 
-        // save
+        // encode the bits into image
+        encode(bits, image);
+
+        // save the modified image into outFile
         ImageIO.write(image, "png", new File(outFile));
     }
 
     public static void main(String[] args) throws IOException {
-        final Steganography se = new Steganography("/1_Kyoto.png", "steganograms/steganogram.png");
+        final ImageSteganography se = new ImageSteganography("/1_Kyoto.png", "steganograms/steganogram.png");
         se.encode("Steganography rules!".getBytes("UTF-8"));
     }
 }
