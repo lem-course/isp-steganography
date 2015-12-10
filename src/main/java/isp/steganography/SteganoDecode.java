@@ -12,8 +12,8 @@ import javax.imageio.ImageIO;
  * - E2. Ensure Implement changing distance between LSB bits
  * - E3. Implement EOF auto-detection
  * - E4. Switch between RGB values
- * - E5. Use encryption (e.g. AES) to provide message secrecy
- * - E6. Use HMAC to provide message authenticity and data integrity
+ * - E5. Use encryption (e.g. AES) to provide payload secrecy
+ * - E6. Use HMAC to provide payload authenticity and data integrity
  *
  * @author Iztok Starc <iztok.starc@fri.uni-lj.si>
  * @version 1
@@ -33,7 +33,7 @@ public class SteganoDecode {
 
     public SteganoDecode(String srcFile, int messageLen) throws IOException {
 
-        this.messageLen = messageLen; // Fixed message size in bytes (E3. Implement EOF auto-detection)
+        this.messageLen = messageLen; // Fixed payload size in bytes (E3. Implement EOF auto-detection)
 
         // Load the Image
         this.src = ImageIO.read(new File(srcFile));
@@ -58,7 +58,7 @@ public class SteganoDecode {
         // Create the byte sequence to store steganogram
         byte[] messageBytes = new byte[mLenInBytes];
 
-        // Interate over known message size
+        // Interate over known payload size
         for (int i = 0; i != mLenInBytes; i++) {
             byte y = 0x00;
             for (int j = 0; j != 8; j++) {
