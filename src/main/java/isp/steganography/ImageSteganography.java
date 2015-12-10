@@ -28,7 +28,6 @@ public class ImageSteganography {
 
     public ImageSteganography(final String inFile) {
         this(inFile, null);
-        ;
     }
 
     public void encode(final byte[] payload) throws IOException {
