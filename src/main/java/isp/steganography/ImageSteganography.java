@@ -27,11 +27,15 @@ public class ImageSteganography {
     }
 
     public ImageSteganography(final String inFile) {
-        this.inFile = inFile;
-        this.outFile = null;
+        this(inFile, null);
+        ;
     }
 
     public void encode(final byte[] payload) throws IOException {
+        if (inFile == null || outFile == null) {
+            throw new IllegalStateException("Encoding requires input and output file");
+        }
+
         // Convert byte array to bit sequence (array of booleans)
         final boolean[] bits = getBits(payload);
 
@@ -46,6 +50,10 @@ public class ImageSteganography {
     }
 
     public byte[] decode(final int byteLen) throws IOException {
+        if (inFile == null) {
+            throw new IllegalStateException("Encoding requires input file");
+        }
+
         final BufferedImage image = loadFile(inFile);
 
         final boolean[] bits = decode(image, byteLen);
