@@ -49,7 +49,7 @@ public class SteganoDecode {
         doDecode();
 
         // Convert Bits to Bytes and finally to String and print out
-        String steganoMessage = new String(getByteSequence(this.bitMessage, this.messageLen));
+        String steganoMessage = new String(getByteSequence(this.bitMessage, this.messageLen), "UTF-8");
         System.out.println(steganoMessage);
     }
 
@@ -103,6 +103,6 @@ public class SteganoDecode {
     }
 
     public static void main(String[] args) throws IOException {
-        SteganoDecode sd = new SteganoDecode("slike/Steganogram.png", 20);
+        SteganoDecode sd = new SteganoDecode("steganograms/steganogram.png", 20);
     }
 }

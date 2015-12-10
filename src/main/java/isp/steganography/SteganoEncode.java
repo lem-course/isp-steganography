@@ -1,5 +1,6 @@
 package isp.steganography;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -26,9 +27,9 @@ public class SteganoEncode {
 
     private final BufferedImage image;
 
-    public SteganoEncode(String srcFile, String dstFile, String message) throws IOException {
+    public SteganoEncode(String sourceFile, String steganogramFile, String message) throws IOException {
         // Load the Image
-        image = ImageIO.read(SteganoEncode.class.getResource(srcFile));
+        image = ImageIO.read(SteganoEncode.class.getResource(sourceFile));
 
         // Convert String to Bit Sequence
         bitMessage = getBits(message);
@@ -37,7 +38,7 @@ public class SteganoEncode {
         encode();
 
         // Save the Image
-        ImageIO.write(image, "png", new File(dstFile));
+        ImageIO.write(image, "png", new File(steganogramFile));
     }
 
     private boolean[] getBits(String x) throws UnsupportedEncodingException {
@@ -46,65 +47,41 @@ public class SteganoEncode {
 
         for (int i = 0, bitCounter = 0; i < bytes.length; i++) {
             for (int j = 0; j < 8; j++) {
-                // Isolate individual bit and store to bits
-                bits[bitCounter] = ((bytes[i] & (0x01 << j)) == 1);
+                bits[bitCounter] = (bytes[i] & (0x01 << j)) != 0;
                 bitCounter++;
             }
         }
+
         return bits;
     }
 
     private void encode() {
-        // Iterate from min.x to max.x
-        for (int i = image.getMinX(), cnt = 0; i != image.getWidth(); i++) {
-            // Iterate from min.y to max.y
-            for (int j = image.getMinY(); j != image.getHeight(); j++) {
+        // Traverse all pixels
+        for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < bitMessage.length; i++) {
+            for (int j = image.getMinY(); j < image.getHeight() && bitCounter < bitMessage.length; j++) {
 
-                // Get the current pixel and convert to Alpha, Red, Green, Blue
-                int pixel = image.getRGB(i, j);
-                int[] argb = pixelToRgba(pixel);
-                System.out.println(cnt + " Before -- Pixel (" + i + "," + j + "): Alpha: " + argb[0] + ", Red: " + argb[1] + ", Green: " + argb[2] + ", Blue: " + argb[3]);
+                // Convert the pixel to Alpha, Red, Green, Blue
+                final int pixel = image.getRGB(i, j);
+                // final int[] argb = pixelToArgb(pixel);
+                final Color original = new Color(pixel);
 
-                // Encode current bit in the LSB of the red pixel 
-                if (bitMessage[cnt] == true)
-                    argb[1] = argb[1] & 0xfe | 0x01;
-                    //            ^------------^   ^--^
-                    //             OLD VALUES       NEW VALUE
-                else
-                    argb[1] = argb[1] & 0xfe;
-                //            ^------------^
-                //             OLD VALUES (NEW VALUE IS IMPLICITY 0)
+                // Let's use red component only
+                final int newRed = bitMessage[bitCounter] ?
+                        original.getRed() | 0x01 : // sets LSB to 1
+                        original.getRed() & 0xfe;  // sets LSB to 0
+
+                final Color modified = new Color(newRed, original.getGreen(), original.getBlue());
 
                 // Replace the current pixel with new values
-                int newPixel = rgbaToPixel(argb[0], argb[1], argb[2], argb[3]);
-                this.image.setRGB(i, j, newPixel);
-                System.out.println(cnt + " After --  Pixel (" + i + "," + j + "): Alpha: " + argb[0] + ", Red: " + argb[1] + ", Green: " + argb[2] + ", Blue: " + argb[3]);
-                System.out.println();
+                image.setRGB(i, j, modified.getRGB());
+                System.out.printf("%03d bit, pixel(%03d, %03d) = %s -> %s%n", bitCounter, i, j, original, modified);
 
-                // Return if done
-                cnt++;
-                if (bitMessage.length == cnt)
-                    return;
+                bitCounter++;
             }
         }
     }
 
-    private int[] pixelToRgba(int pixel) {
-        // Parse
-        int alpha = (pixel >> 24) & 0xff;
-        int red = (pixel >> 16) & 0xff;
-        int green = (pixel >> 8) & 0xff;
-        int blue = (pixel) & 0xff;
-        int[] retVal = {alpha, red, green, blue};
-        return retVal;
-    }
-
-    private int rgbaToPixel(int alpha, int red, int green, int blue) {
-        // Compile
-        return ((alpha & 0xff) << 24) | ((red & 0xff) << 16) | ((green & 0xff) << 8) | (blue & 0xff);
-    }
-
     public static void main(String[] args) throws IOException {
-        SteganoEncode se = new SteganoEncode("/1_Kyoto.png", "Steganogram.png", "Steganography rules!");
+        SteganoEncode se = new SteganoEncode("/1_Kyoto.png", "steganograms/steganogram.png", "Steganography rules!");
     }
 }
