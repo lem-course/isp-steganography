@@ -101,7 +101,7 @@ public class ImageSteganography {
      * @param payload The array of bits
      * @param image   The image onto which the payload is to be encoded
      */
-    private final void encode(final boolean[] payload, final BufferedImage image) {
+    protected final void encode(final boolean[] payload, final BufferedImage image) {
         for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < payload.length; i++) {
             for (int j = image.getMinY(); j < image.getHeight() && bitCounter < payload.length; j++) {
                 final Color original = new Color(image.getRGB(i, j));
@@ -125,7 +125,7 @@ public class ImageSteganography {
         }
     }
 
-    protected boolean[] decode(final BufferedImage image, final int byteLength) {
+    protected final boolean[] decode(final BufferedImage image, final int byteLength) {
         final boolean[] bits = new boolean[byteLength * 8];
 
         for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < bits.length; i++) {
