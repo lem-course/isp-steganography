@@ -1,10 +1,10 @@
 package isp.steganography;
 
+import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import javax.imageio.ImageIO;
 
 /**
  * EXERCISE:
@@ -18,12 +18,41 @@ import javax.imageio.ImageIO;
  */
 public class ImageSteganography {
 
-    protected String inFile;
-    protected String outFile;
+    protected final String inFile;
+    protected final String outFile;
 
     public ImageSteganography(final String inFile, final String outFile) {
         this.inFile = inFile;
         this.outFile = outFile;
+    }
+
+    public ImageSteganography(final String inFile) {
+        this.inFile = inFile;
+        this.outFile = null;
+    }
+
+    public void encode(final byte[] payload) throws IOException {
+        // Convert byte array to bit sequence (array of booleans)
+        final boolean[] bits = getBits(payload);
+
+        // load the image
+        final BufferedImage image = loadFile(inFile);
+
+        // encode the bits into image
+        encode(bits, image);
+
+        // save the modified image into outFile
+        ImageIO.write(image, "png", new File(outFile));
+    }
+
+    public byte[] decode(final int byteLen) throws IOException {
+        final BufferedImage image = loadFile(inFile);
+
+        final boolean[] bits = decode(image, byteLen);
+
+        final byte[] result = getBytes(bits);
+
+        return result;
     }
 
     /**
@@ -55,7 +84,7 @@ public class ImageSteganography {
      * @throws IOException If file does not exist
      */
     protected BufferedImage loadFile(final String inFile) throws IOException {
-        return ImageIO.read(ImageSteganography.class.getResource(inFile));
+        return ImageIO.read(new File(inFile));
     }
 
     /**
@@ -81,29 +110,45 @@ public class ImageSteganography {
                 // Replace the current pixel with the new color
                 image.setRGB(i, j, modified.getRGB());
 
-                System.out.printf("%03d bit [%d, %d]: %s -> %s%n", bitCounter, i, j, original, modified);
+                // Uncomment to see changes in the RGB components
+                // System.out.printf("%03d bit [%d, %d]: %s -> %s%n", bitCounter, i, j, original, modified);
 
                 bitCounter++;
             }
         }
     }
 
-    public void encode(final byte[] payload) throws IOException {
-        // Convert byte array to bit sequence (actually, to an array of booleans)
-        final boolean[] bits = getBits(payload);
+    protected boolean[] decode(final BufferedImage image, final int byteLength) {
+        final boolean[] bits = new boolean[byteLength * 8];
 
-        // encode the bits into image
-        final BufferedImage image = loadFile(inFile);
+        for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < bits.length; i++) {
+            for (int j = image.getMinY(); j < image.getHeight() && bitCounter < bits.length; j++) {
+                final Color color = new Color(image.getRGB(i, j));
+                final int red = color.getRed();
 
-        // encode the bits into image
-        encode(bits, image);
+                bits[bitCounter] = ((red & 0x1) != 0);
+                bitCounter++;
+            }
+        }
 
-        // save the modified image into outFile
-        ImageIO.write(image, "png", new File(outFile));
+        return bits;
     }
 
-    public static void main(String[] args) throws IOException {
-        final ImageSteganography se = new ImageSteganography("/1_Kyoto.png", "steganograms/steganogram.png");
-        se.encode("Steganography rules!".getBytes("UTF-8"));
+    protected byte[] getBytes(boolean[] bits) {
+        final byte[] bytes = new byte[bits.length / 8];
+
+        for (int byteIndex = 0; byteIndex < bytes.length; byteIndex++) {
+            byte byte_ = 0;
+
+            for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+                byte_ |= (bits[8 * byteIndex + bitIndex] ?
+                        (byte) 0x01 :
+                        (byte) 0x00) << bitIndex;
+            }
+
+            bytes[byteIndex] = byte_;
+        }
+
+        return bytes;
     }
 }

@@ -119,4 +119,5 @@ local.properties
 # TeXlipse plugin
 .texlipse
 
-steganograms/*.png
+images/steganogram.png
+
