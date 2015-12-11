@@ -7,8 +7,8 @@ public class App {
         final String secretMessage = "Steganography rules!";
         final int messageLength = secretMessage.length();
 
-        final ImageSteganography encode = new ImageSteganography("images/1_Kyoto.png", "images/steganogram.png");
-        encode.encode(secretMessage.getBytes("UTF-8"));
+        final ImageSteganography encode = new ImageSteganography("images/1_Kyoto.png");
+        encode.encode("images/steganogram.png", secretMessage.getBytes("UTF-8"));
 
         final ImageSteganography decode = new ImageSteganography("images/steganogram.png");
         final byte[] decoded = decode.decode(messageLength);

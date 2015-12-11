@@ -18,28 +18,19 @@ import java.io.IOException;
  */
 public class ImageSteganography {
 
-    protected final String inFile;
-    protected final String outFile;
-
-    public ImageSteganography(final String inFile, final String outFile) {
-        this.inFile = inFile;
-        this.outFile = outFile;
-    }
+    protected final BufferedImage image;
 
     public ImageSteganography(final String inFile) {
-        this(inFile, null);
+        try {
+            image = loadFile(inFile);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("An invalid input image: " + e.getMessage());
+        }
     }
 
-    public void encode(final byte[] payload) throws IOException {
-        if (inFile == null || outFile == null) {
-            throw new IllegalStateException("Encoding requires input and output file");
-        }
-
+    public void encode(final String outFile, final byte[] payload) throws IOException {
         // Convert byte array to bit sequence (array of booleans)
         final boolean[] bits = getBits(payload);
-
-        // load the image
-        final BufferedImage image = loadFile(inFile);
 
         // encode the bits into image
         encode(bits, image);
@@ -49,12 +40,6 @@ public class ImageSteganography {
     }
 
     public byte[] decode(final int byteLen) throws IOException {
-        if (inFile == null) {
-            throw new IllegalStateException("Encoding requires input file");
-        }
-
-        final BufferedImage image = loadFile(inFile);
-
         final boolean[] bits = decode(image, byteLen);
 
         final byte[] result = getBytes(bits);
