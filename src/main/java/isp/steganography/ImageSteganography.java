@@ -7,14 +7,13 @@ import java.io.File;
 import java.io.IOException;
 
 /**
- * EXERCISE:
+ * Assignments:
  * <p/>
- * - E1. Ensure initial offset when encoding LSB bits
- * - E2. Ensure Implement changing distance between LSB bits
- * - E3. Implement EOF auto-detection
- * - E4. Switch between RGB values
- * - E5. Use encryption (e.g. AES) to provide bits secrecy
- * - E6. Use HMAC to provide bits authenticity and data integrity
+ * - E1. Use the remaining two color channels to enhance the capacity of the steganogram.
+ * - E2. Modify implementation so that the receiver can read the size of the hidden message
+ * from the first 32 bits of the steganogram. After parsing those 32 bits, process
+ * the rest of steganogram accordingly.
+ * - E3. Add security: Provide secrecy and integrity for the hidden message.
  */
 public class ImageSteganography {
 
