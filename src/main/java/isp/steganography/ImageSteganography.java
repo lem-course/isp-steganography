@@ -4,13 +4,13 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.security.AlgorithmParameters;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
@@ -18,19 +18,26 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 /**
- * EXERCISE:
- * <p/>
- * - E1. Ensure initial initialOffset when encoding LSB bits
- * - E2. Ensure Implement changing distance between LSB bits
- * - E3. Implement EOF auto-detection
- * - E4. Switch between RGB values
- * - E5. Use encryption (e.g. AES) to provide bits secrecy
- * - E6. Use HMAC to provide bits authenticity and data integrity
+ * This solution requires JDK 8.
  */
 public class ImageSteganography {
 
+    /**
+     * length of IV for GCM
+     */
+    public static final int IV_LENGTH = 12;
+
+    /**
+     * The number of bits representing the size of the encoded payload
+     */
+    public static final int SIZE_LENGTH_BITS = 32;
+    public static final int GMAC_SIZE = 16;
     protected final BufferedImage image;
     protected final Key key;
+
+    public ImageSteganography(final String inFile) {
+        this(inFile, null);
+    }
 
     public ImageSteganography(final String inFile, final Key aesKey) {
         try {
@@ -41,44 +48,60 @@ public class ImageSteganography {
         }
     }
 
-    public void encodeAndEncrypt(final String outFile, final byte[] payload)
+    public void encode(final String outFile, final byte[] payload) throws IOException, IllegalBlockSizeException, InvalidKeyException, BadPaddingException, NoSuchAlgorithmException, NoSuchPaddingException {
+        if (key == null) {
+            doEncode(outFile, payload);
+        } else {
+            doEncodeAndEncrypt(outFile, payload);
+        }
+    }
+
+    protected void doEncodeAndEncrypt(final String outFile, final byte[] payload)
             throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException, IOException,
             BadPaddingException, IllegalBlockSizeException {
-
-        // payload + 16 bytes for Galois MAC
-        final byte[] payloadSize = ByteBuffer.allocate(4).putInt(payload.length + 16).array();
-
+        // Encryption cipher: GCM (This requires JAVA 8)
         final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, key);
-        final byte[] ap = cipher.getParameters().getEncoded();
 
-        System.out.println(Arrays.toString(ap));
+        /* The size of the encoded payload is the size of the actual payload plus the
+         * 16 bytes (128 bits) for Galois MAC (GMAC). Note that the size of the cipher
+         * text is the same as the size of the plaint text, since GCM is in effect a
+         * stream cipher.
+         */
+        final byte[] payloadSize = ByteBuffer.allocate(4).putInt(payload.length + GMAC_SIZE).array();
 
-        // GCM: Authenticate AP and size
-        // todo: cipher.updateAAD(ap);
-        // todo: cipher.updateAAD(payloadSize);
+        // IV
+        final byte[] iv = cipher.getIV();
+
+        // GCM: Authenticate IV
+        cipher.updateAAD(iv);
+
+        // GCM: Authenticate size
+        cipher.updateAAD(payloadSize);
+
+        // encrypt
         final byte[] cipherText = cipher.doFinal(payload);
 
-        // merge AP and cipherText arrays
-        final byte[] finalPayload = Arrays.copyOf(ap, ap.length + cipherText.length);
-        System.arraycopy(cipherText, 0, finalPayload, ap.length, cipherText.length);
-        System.out.printf("size=4, pt=%d, ap=%d, ct=%d%n", payload.length, ap.length, cipherText.length);
+        // merge IV and cipherText arrays
+        final byte[] ivAndPayload = Arrays.copyOf(iv, iv.length + cipherText.length);
+        System.arraycopy(cipherText, 0, ivAndPayload, iv.length, cipherText.length);
 
+        // convert bytes to bits
         final boolean[] size = getBits(payloadSize);
-        final boolean[] bits = getBits(finalPayload);
+        final boolean[] bits = getBits(ivAndPayload);
 
-        // merge all bits into a single array
+        // merge both bits arrays
         final boolean[] bitPayload = Arrays.copyOf(size, size.length + bits.length);
         System.arraycopy(bits, 0, bitPayload, size.length, bits.length);
 
         // encode the bits into image
         encode(bitPayload, image);
 
-        // save the modified image into outFile
+        // save the modified image to outFile
         ImageIO.write(image, "png", new File(outFile));
     }
 
-    public void encode(final String outFile, final byte[] payload) throws IOException {
+    protected void doEncode(final String outFile, final byte[] payload) throws IOException {
         final boolean[] size = getBits(ByteBuffer.allocate(4).putInt(payload.length).array());
         final boolean[] bits = getBits(payload);
 
@@ -94,24 +117,31 @@ public class ImageSteganography {
 
     public byte[] decode() throws IOException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException,
             InvalidAlgorithmParameterException, BadPaddingException, IllegalBlockSizeException {
-        final boolean[] bits = decode(image);
+        final boolean[][] decoded = decode(image);
 
-        final byte[] bytes = getBytes(bits);
+        final byte[] size = getBytes(decoded[0]);
+        final byte[] payload = getBytes(decoded[1]);
+
         if (key == null) {
-            return bytes;
+            return payload;
         } else {
-            // todo: decrypt
-            final AlgorithmParameters ap = AlgorithmParameters.getInstance("AES");
-            final byte[] apBytes = Arrays.copyOfRange(bytes, 0, 19);
-            System.out.println(Arrays.toString(apBytes));
-            ap.init(apBytes); // first 19 bytes are AP
+            // The first IV_LENGTH bytes are the IV
+            final byte[] iv = Arrays.copyOfRange(payload, 0, IV_LENGTH);
+
+            // Set the GCM parameters
+            final GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(8 * GMAC_SIZE, iv);
 
             final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, key, ap);
+            cipher.init(Cipher.DECRYPT_MODE, key, gcmParameterSpec);
 
-            // cipher.updateAAD(ap.getEncoded());
-            // cipher.updateAAD(payloadSize);
-            return cipher.doFinal(Arrays.copyOfRange(bytes, 19, bytes.length));
+            // Authenticate IV
+            cipher.updateAAD(iv);
+
+            // Authenticate size
+            cipher.updateAAD(size);
+            final byte[] encryptedPayload = Arrays.copyOfRange(payload, IV_LENGTH, payload.length);
+
+            return cipher.doFinal(encryptedPayload);
         }
     }
 
@@ -178,9 +208,9 @@ public class ImageSteganography {
         }
     }
 
-    protected final boolean[] decode(final BufferedImage image) {
-        boolean[] bits = new boolean[32];
-        final boolean[] size = new boolean[32];
+    protected final boolean[][] decode(final BufferedImage image) {
+        boolean[] bits = new boolean[0];
+        final boolean[] size = new boolean[SIZE_LENGTH_BITS];
 
         for (int i = image.getMinX(), bitCounter = 0;
              i < image.getWidth() && bitCounter < bits.length + size.length; i++) {
@@ -188,26 +218,30 @@ public class ImageSteganography {
                 final Color color = new Color(image.getRGB(i, j));
                 final int red = color.getRed();
 
-                if (bitCounter < 32) {
+                if (bitCounter < SIZE_LENGTH_BITS) {
                     // find out the size
                     size[bitCounter] = ((red & 0x1) != 0);
 
-                    if (bitCounter == 31) {
+                    if (bitCounter == SIZE_LENGTH_BITS - 1) {
                         // last iteration
-                        final int length = ByteBuffer.wrap(getBytes(size)).getInt();
+                        final int length = key == null ?
+                                ByteBuffer.wrap(getBytes(size)).getInt() :
+                                ByteBuffer.wrap(getBytes(size)).getInt() + IV_LENGTH; // room for IV
                         bits = new boolean[length * 8];
-
-                        System.out.printf("Size in bytes: %d%n", length);
                     }
                 } else {
-                    bits[bitCounter - 32] = ((red & 0x1) != 0);
+                    bits[bitCounter - SIZE_LENGTH_BITS] = ((red & 0x1) != 0);
                 }
 
                 bitCounter++;
             }
         }
 
-        return bits;
+        final boolean[][] result = new boolean[2][];
+        result[0] = size;
+        result[1] = bits;
+
+        return result;
     }
 
     protected byte[] getBytes(boolean[] bits) {
