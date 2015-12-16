@@ -19,8 +19,7 @@ public class App {
 
         final ImageSteganography decoder = new ImageSteganography("images/steganogram.png");
         final byte[] decoded = decoder.decode();
-        System.out.printf("Decoded: %s%n", new String(decoded, "UTF-8"));
-
+        System.out.println(new String(decoded, "UTF-8"));
 
         final Key key = KeyGenerator.getInstance("AES").generateKey();
 

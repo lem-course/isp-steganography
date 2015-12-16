@@ -166,7 +166,7 @@ public class ImageSteganography {
 
     /**
      * Loads a file from given name and returns an instance of the BufferedImage
-     * <p/>
+     * <p>
      * The file has to be located in src/main/resources directory.
      *
      * @param inFile
@@ -187,61 +187,97 @@ public class ImageSteganography {
     protected final void encode(final boolean[] payload, final BufferedImage image) {
         for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < payload.length; i++) {
             for (int j = image.getMinY(); j < image.getHeight() && bitCounter < payload.length; j++) {
+
                 final Color original = new Color(image.getRGB(i, j));
 
-                // Let's modify the red component only
-                final int newRed = payload[bitCounter] ?
-                        original.getRed() | 0x01 : // sets LSB to 1
-                        original.getRed() & 0xfe;  // sets LSB to 0
+                int newRed = original.getRed();
+                int newGreen = original.getGreen();
+                int newBlue = original.getBlue();
+
+                for (byte rgb = 0; rgb < 3 && bitCounter < payload.length; rgb++, bitCounter++) {
+                    switch (rgb) {
+                        case 0:
+                            newRed = payload[bitCounter] ?
+                                    newRed | 0x01 : // sets LSB to 1
+                                    newRed & 0xfe;  // sets LSB to 0
+                            break;
+                        case 1:
+                            newGreen = payload[bitCounter] ?
+                                    newGreen | 0x01 : // sets LSB to 1
+                                    newGreen & 0xfe;  // sets LSB to 0
+                            break;
+                        case 2:
+                            newBlue = payload[bitCounter] ?
+                                    newBlue | 0x01 : // sets LSB to 1
+                                    newBlue & 0xfe;  // sets LSB to 0
+                            break;
+                    }
+                }
 
                 // Create a new color object
-                final Color modified = new Color(newRed, original.getGreen(), original.getBlue());
+                final Color modified = new Color(newRed, newGreen, newBlue);
 
                 // Replace the current pixel with the new color
                 image.setRGB(i, j, modified.getRGB());
 
                 // Uncomment to see changes in the RGB components
-                //System.out.printf("%03d bit [%d, %d]: %s -> %s%n", bitCounter, i, j, original, modified);
-
-                bitCounter++;
+                //System.out.printf("%3d [%d, %d]: %s -> %s%n", bitCounter, i, j, original, modified);
             }
         }
     }
 
     protected final boolean[][] decode(final BufferedImage image) {
-        boolean[] bits = new boolean[0];
-        final boolean[] size = new boolean[SIZE_LENGTH_BITS];
+        boolean[] payloadBits = new boolean[0];
+        final boolean[] payloadSizeBits = new boolean[SIZE_LENGTH_BITS];
 
         for (int i = image.getMinX(), bitCounter = 0;
-             i < image.getWidth() && bitCounter < bits.length + size.length; i++) {
-            for (int j = image.getMinY(); j < image.getHeight() && bitCounter < bits.length + size.length; j++) {
+             i < image.getWidth() && bitCounter < payloadBits.length + payloadSizeBits.length;
+             i++) {
+            for (int j = image.getMinY();
+                 j < image.getHeight() && bitCounter < payloadBits.length + payloadSizeBits.length;
+                 j++) {
                 final Color color = new Color(image.getRGB(i, j));
-                final int red = color.getRed();
+                final boolean redBit = ((color.getRed() & 0x1) != 0);
+                final boolean greenBit = ((color.getGreen() & 0x1) != 0);
+                final boolean blueBit = ((color.getBlue() & 0x1) != 0);
 
-                if (bitCounter < SIZE_LENGTH_BITS) {
-                    // find out the size
-                    size[bitCounter] = ((red & 0x1) != 0);
+                for (byte rgb = 0; rgb < 3 && bitCounter < payloadBits.length + payloadSizeBits.length; rgb++, bitCounter++) {
+                    switch (rgb) {
+                        case 0:
+                            readBit(bitCounter, redBit, payloadSizeBits, payloadBits);
+                            break;
+                        case 1:
+                            readBit(bitCounter, greenBit, payloadSizeBits, payloadBits);
+                            break;
+                        case 2:
+                            readBit(bitCounter, blueBit, payloadSizeBits, payloadBits);
+                            break;
+                    }
 
                     if (bitCounter == SIZE_LENGTH_BITS - 1) {
-                        // last iteration
+                        // read the size
                         final int length = key == null ?
-                                ByteBuffer.wrap(getBytes(size)).getInt() :
-                                ByteBuffer.wrap(getBytes(size)).getInt() + IV_LENGTH; // room for IV
-                        bits = new boolean[length * 8];
+                                ByteBuffer.wrap(getBytes(payloadSizeBits)).getInt() : // when not encrypting
+                                ByteBuffer.wrap(getBytes(payloadSizeBits)).getInt() + IV_LENGTH; // when encrypting we need room for IV
+                        payloadBits = new boolean[length * 8];
                     }
-                } else {
-                    bits[bitCounter - SIZE_LENGTH_BITS] = ((red & 0x1) != 0);
                 }
-
-                bitCounter++;
             }
         }
 
         final boolean[][] result = new boolean[2][];
-        result[0] = size;
-        result[1] = bits;
+        result[0] = payloadSizeBits;
+        result[1] = payloadBits;
 
         return result;
+    }
+
+    private void readBit(int bitCounter, boolean bit, boolean[] size, boolean[] payload) {
+        if (bitCounter < SIZE_LENGTH_BITS) {
+            size[bitCounter] = bit;
+        } else {
+            payload[bitCounter - SIZE_LENGTH_BITS] = bit;
+        }
     }
 
     protected byte[] getBytes(boolean[] bits) {
