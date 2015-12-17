@@ -1,17 +1,12 @@
 package isp.steganography;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.KeyGenerator;
-import javax.crypto.NoSuchPaddingException;
 import java.io.IOException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 
 public class App {
-    public static void main(String[] args) throws IOException, NoSuchPaddingException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
+    public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
         final String secretMessage = "Steganography rules!";
 
         final ImageSteganography encoder = new ImageSteganography("images/1_Kyoto.png");

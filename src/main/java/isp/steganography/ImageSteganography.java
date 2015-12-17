@@ -37,7 +37,7 @@ public class ImageSteganography {
     /**
      * GCM MAC size in bytes
      */
-    protected static final int GMAC_SIZE = 16;
+    protected static final int GMAC_LENGTH = 16;
 
     /**
      * Key used for encryption
@@ -59,9 +59,7 @@ public class ImageSteganography {
         }
     }
 
-    public void encode(final String outFile, final byte[] payload) throws
-            IOException, IllegalBlockSizeException, InvalidKeyException,
-            BadPaddingException, NoSuchAlgorithmException, NoSuchPaddingException {
+    public void encode(final String outFile, final byte[] payload) throws IOException {
         if (key == null) {
             doEncode(outFile, payload);
         } else {
@@ -92,45 +90,71 @@ public class ImageSteganography {
         ImageIO.write(image, "png", new File(outFile));
     }
 
-    protected void doEncryptAndEncode(final String outFile, final byte[] payload) throws
-            NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException,
-            IOException, BadPaddingException, IllegalBlockSizeException {
-        // Encryption with GCM. This requires JAVA 8.
-        final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, key);
+    /**
+     * Encrypts and encodes given payload onto the image that has previously been loaded,
+     * and then writes the modified image to the given file.
+     * <p>
+     * The encoded data has the following structure:
+     * <ol>
+     * <li>The first 32 bits represent an integer that denotes the size of the payload:</li>
+     * <li>The remaining bits denote the payload:</li>
+     * <ul>
+     * <li>The first 96 bits (12 bytes) of the payload is not encrypted; they represent the IV that was used to encrypt the payload.</li>
+     * <li>The remaining bits denote the encrypted part;</li>
+     * <li>The last 128 bits of the payload denote the Galois MAC.</li>
+     * </ul>
+     * </ol>
+     * The bytes that denote the IV and the size of the payload are included in the computation of the GMAC. Function Cipher.updateAAD is used to authenticated these bytes.
+     *
+     * @param outFile The filename of the steganogram
+     * @param payload The byte[] to be encoded
+     */
+    protected void doEncryptAndEncode(final String outFile, final byte[] payload) throws IOException {
+        try {
+            // Encryption with GCM. This requires JAVA 8.
+            final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, key);
 
-        /* The size of the encoded payload is the size of the actual payload plus the
-         * size of the Galois MAC (GMAC). Note the size of the cipher text is the
-         * same as the size of the plaint text, since GCM is in effect a stream cipher. */
-        final byte[] payloadSize = ByteBuffer.allocate(4).putInt(payload.length + GMAC_SIZE).array();
+            /* The size of the encoded payload is the size of the actual payload plus the
+             * size of the Galois MAC (GMAC). Note the size of the cipher text is the
+             * same as the size of the plaint text, since GCM is in effect a stream cipher. */
+            final byte[] payloadSize = ByteBuffer.allocate(4).putInt(payload.length + GMAC_LENGTH).array();
 
-        // IV
-        final byte[] iv = cipher.getIV();
+            // IV
+            final byte[] iv = cipher.getIV();
 
-        // GCM: Authenticate IV
-        cipher.updateAAD(iv);
+            // GCM: Authenticate IV
+            cipher.updateAAD(iv);
 
-        // GCM: Authenticate size
-        cipher.updateAAD(payloadSize);
+            // GCM: Authenticate size
+            cipher.updateAAD(payloadSize);
 
-        // encrypt
-        final byte[] cipherText = cipher.doFinal(payload);
+            // encrypt
+            final byte[] cipherText = cipher.doFinal(payload);
 
-        // merge IV and cipherText arrays
-        final byte[] ivAndPayload = Arrays.copyOf(iv, iv.length + cipherText.length);
-        System.arraycopy(cipherText, 0, ivAndPayload, iv.length, cipherText.length);
+            // merge IV and cipherText arrays
+            final byte[] ivAndPayload = Arrays.copyOf(iv, iv.length + cipherText.length);
+            System.arraycopy(cipherText, 0, ivAndPayload, iv.length, cipherText.length);
 
-        // convert bytes to bits and concatenate them into a single array
-        final boolean[] payloadSizeBits = getBits(payloadSize);
-        final boolean[] payloadBits = getBits(ivAndPayload);
-        final boolean[] entirePayload = Arrays.copyOf(payloadSizeBits, payloadSizeBits.length + payloadBits.length);
-        System.arraycopy(payloadBits, 0, entirePayload, payloadSizeBits.length, payloadBits.length);
+            // convert bytes to bits and concatenate them into a single array
+            final boolean[] payloadSizeBits = getBits(payloadSize);
+            final boolean[] payloadBits = getBits(ivAndPayload);
+            final boolean[] entirePayload = Arrays.copyOf(payloadSizeBits, payloadSizeBits.length + payloadBits.length);
+            System.arraycopy(payloadBits, 0, entirePayload, payloadSizeBits.length, payloadBits.length);
 
-        // encode the bits into image
-        encode(entirePayload, image);
+            // encode the bits into image
+            encode(entirePayload, image);
 
-        // save the modified image to outFile
-        ImageIO.write(image, "png", new File(outFile));
+            // save the modified image to outFile
+            ImageIO.write(image, "png", new File(outFile));
+        } catch (NoSuchAlgorithmException |
+                NoSuchPaddingException |
+                InvalidKeyException |
+                IllegalBlockSizeException |
+                BadPaddingException e) {
+            System.err.printf("Exception: %s%n", e.getLocalizedMessage());
+            throw new IllegalStateException(e);
+        }
     }
 
     /**
@@ -185,7 +209,7 @@ public class ImageSteganography {
     /**
      * Decodes the payload from loaded steganogram.
      * <p>
-     * If the key has been set, the decryption step is applied beforehand.
+     * If the key has been set, the decryption is applied beforehand.
      *
      * @return
      */
@@ -196,28 +220,29 @@ public class ImageSteganography {
         final byte[] size = getBytes(decoded.getKey());
         final byte[] payload = getBytes(decoded.getValue());
 
-        // if the key has not been set, do not decrypt
+        // if there's no key, we're done
         if (key == null) {
             return payload;
         } else {
+            // we have to decrypt first
             try {
-                // The first IV_LENGTH bytes are the IV
+                // The first 12 bytes represent the IV
                 final byte[] iv = Arrays.copyOfRange(payload, 0, IV_LENGTH);
 
                 // Set the GCM parameters
-                final GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(8 * GMAC_SIZE, iv);
+                final GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(8 * GMAC_LENGTH, iv);
 
                 // set up the cipher
                 final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
                 cipher.init(Cipher.DECRYPT_MODE, key, gcmParameterSpec);
 
-                // Authenticate IV
+                // The GMAC is computed over IV
                 cipher.updateAAD(iv);
 
-                // Authenticate size
+                // The GMAC is computed over size, too
                 cipher.updateAAD(size);
 
-                // the encrypted payload is from the IV_LENGTH onwards
+                // the encrypted payload is from the 16th byte onwards
                 final byte[] encryptedPayload = Arrays.copyOfRange(payload, IV_LENGTH, payload.length);
 
                 // decrypt and return result
@@ -290,23 +315,23 @@ public class ImageSteganography {
                      rgb++, bitCounter++) {
                     switch (rgb) {
                         case 0:
-                            readBit(bitCounter, color.getRed(), payloadSizeBits, payloadBits);
+                            readBit(color.getRed(), bitCounter, payloadSizeBits, payloadBits);
                             break;
                         case 1:
-                            readBit(bitCounter, color.getGreen(), payloadSizeBits, payloadBits);
+                            readBit(color.getGreen(), bitCounter, payloadSizeBits, payloadBits);
                             break;
                         case 2:
-                            readBit(bitCounter, color.getBlue(), payloadSizeBits, payloadBits);
+                            readBit(color.getBlue(), bitCounter, payloadSizeBits, payloadBits);
                             break;
                     }
 
-                    // have we just read the first 32 bits
+                    // After reading the first 32 bits ...
                     if (bitCounter == SIZE_LENGTH_BITS - 1) {
-                        // if so, we can determine the size of the payload
+                        // ... we can determine the size of the payload.
                         final int length = key == null ?
-                                // when not encrypting
+                                // If the payload has not been encrypted, we're done.
                                 ByteBuffer.wrap(getBytes(payloadSizeBits)).getInt() :
-                                // when encrypting we to account  for IV
+                                // If the payload was encrypted, we account for the length of the IV
                                 ByteBuffer.wrap(getBytes(payloadSizeBits)).getInt() + IV_LENGTH;
 
                         // allocate spacae for  the payload
@@ -324,12 +349,12 @@ public class ImageSteganography {
      * The method reads the LSB from given color and writes it to either the
      * size or the payload bit array, depending on the value of the bitCounter.
      *
-     * @param bitCounter the number of the bit that is currently being processed
      * @param color      the color of the pixel
+     * @param bitCounter the number of the bit that is currently being processed
      * @param size       the array of bits representing the size of the payload
      * @param payload    the array of bits representing the payload
      */
-    protected void readBit(int bitCounter, int color, boolean[] size, boolean[] payload) {
+    protected void readBit(int color, int bitCounter, boolean[] size, boolean[] payload) {
         final boolean bit = ((color & 0x1) != 0);
 
         if (bitCounter < SIZE_LENGTH_BITS) {
