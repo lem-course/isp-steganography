@@ -1,7 +1,9 @@
 package isp.steganography;
 
 import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.imageio.ImageIO;
+import javax.xml.bind.DatatypeConverter;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -20,6 +22,10 @@ import java.util.Arrays;
  * - E3. Use the remaining two color channels to enhance the capacity of the steganogram.
  */
 public class ImageSteganography {
+
+    public static String hex(byte[] data) {
+        return DatatypeConverter.printHexBinary(data);
+    }
 
     /**
      * Encodes given payload into the image and writes the image to file.
@@ -46,34 +52,6 @@ public class ImageSteganography {
         ImageIO.write(image, "png", new File(outFile));
     }
 
-    public static void encryptEncode(final byte[] payload, final String inFile, final String outFile, final Key key) throws Exception {
-        // load the image
-        final BufferedImage image = loadImage(inFile);
-
-        final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
-        aes.init(Cipher.ENCRYPT_MODE, key);
-
-        final int finalPayloadSize = payload.length + 16 + 12;
-        aes.updateAAD(ByteBuffer.allocate(4).putInt(finalPayloadSize));
-        final byte[] ct = aes.doFinal(payload);
-        final byte[] iv = aes.getIV();
-
-        final byte[] actualPayload = ByteBuffer.allocate(4 + iv.length + ct.length)
-                .putInt(finalPayloadSize)
-                .put(iv)
-                .put(ct)
-                .array();
-
-        // Convert byte array to bit sequence (array of booleans)
-        final boolean[] bits = getBits(actualPayload);
-
-        // encode the bits into image
-        encode(bits, image);
-
-        // save the modified image into outFile
-        ImageIO.write(image, "png", new File(outFile));
-    }
-
     /**
      * Decodes the message from given filename
      *
@@ -89,16 +67,66 @@ public class ImageSteganography {
         return Arrays.copyOfRange(getBytes(bits), 4, bits.length / 8);
     }
 
+    public static void encryptAndEncode(final byte[] pt, final String inFile, final String outFile, final Key key)
+            throws Exception {
+        final BufferedImage image = loadImage(inFile);
+
+        final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
+        aes.init(Cipher.ENCRYPT_MODE, key);
+
+        final int finalPayloadSize = pt.length + 16 + 12;
+        aes.updateAAD(ByteBuffer.allocate(4).putInt(finalPayloadSize));
+        final byte[] ct = aes.doFinal(pt);
+        final byte[] iv = aes.getIV();
+
+        // final byte[] payload = ByteBuffer.allocate(4 + iv.length + ct.length)
+        final byte[] payload = ByteBuffer.allocate(4 + finalPayloadSize)
+                .putInt(finalPayloadSize)
+                .put(iv)
+                .put(ct)
+                .array();
+
+        System.out.printf("Si %d%n", finalPayloadSize);
+        System.out.printf("PT (%d): %s%n", pt.length, hex(pt));
+        System.out.printf("IV (%d): %s%n", iv.length, hex(iv));
+        System.out.printf("CT (%d): %s%n", ct.length, hex(ct));
+
+        // Convert byte array to bit sequence (array of booleans)
+        final boolean[] bits = getBits(payload);
+
+        // encode the bits into image
+        encode(bits, image);
+
+        // save the modified image into outFile
+        ImageIO.write(image, "png", new File(outFile));
+    }
+
     public static byte[] decryptAndDecode(final String fileName, final Key key) throws Exception {
         final BufferedImage image = loadImage(fileName);
 
-        boolean[] bits = decode(image);
+        final byte[] bytes = getBytes(decode(image));
 
-        bits = Arrays.copyOfRange(bits, 32, bits.length);
+        final ByteBuffer buff = ByteBuffer.wrap(bytes);
 
-        final byte[] result = getBytes(bits);
+        final int size = buff.getInt();
 
-        return result;
+        final byte[] iv = new byte[12];
+        buff.get(iv);
+
+        final byte[] ct = new byte[size - 12];
+        buff.get(ct);
+
+        System.out.printf("Si %d%n", size);
+        System.out.printf("IV (%d): %s%n", iv.length, hex(iv));
+        System.out.printf("CT (%d): %s%n", ct.length, hex(ct));
+
+        final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
+        aes.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+        aes.updateAAD(ByteBuffer.allocate(4).putInt(size));
+        final byte[] pt = aes.doFinal(ct);
+        System.out.printf("PT (%d): %s%n", pt.length, hex(pt));
+
+        return pt;
     }
 
     /**

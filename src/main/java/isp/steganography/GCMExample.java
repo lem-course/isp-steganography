@@ -33,20 +33,20 @@ public class GCMExample {
         System.out.printf("PT:  %s%n", hex(pt));
 
         // encrypt
-        final Cipher encryptor = Cipher.getInstance("AES/GCM/NoPadding");
-        encryptor.init(Cipher.ENCRYPT_MODE, sharedKey);
-        final byte[] ct = encryptor.doFinal(pt);
+        final Cipher alice = Cipher.getInstance("AES/GCM/NoPadding");
+        alice.init(Cipher.ENCRYPT_MODE, sharedKey);
+        final byte[] ct = alice.doFinal(pt);
         System.out.printf("CT:  %s%n", hex(ct));
 
         // send IV
-        final byte[] iv = encryptor.getIV();
+        final byte[] iv = alice.getIV();
         System.out.printf("IV:  %s%n", hex(iv));
 
         // decrypt
-        final Cipher decryptor = Cipher.getInstance("AES/GCM/NoPadding");
+        final Cipher bob = Cipher.getInstance("AES/GCM/NoPadding");
         // the length of the IV is 16 bytes (128 bits)
-        decryptor.init(Cipher.DECRYPT_MODE, sharedKey, new GCMParameterSpec(128, iv));
-        final byte[] pt2 = decryptor.doFinal(ct);
+        bob.init(Cipher.DECRYPT_MODE, sharedKey, new GCMParameterSpec(128, iv));
+        final byte[] pt2 = bob.doFinal(ct);
         System.out.printf("PT:  %s%n", hex(pt2));
         System.out.printf("MSG: %s%n", new String(pt2, "UTF-8"));
     }
