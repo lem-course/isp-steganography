@@ -4,14 +4,11 @@ import java.io.IOException;
 
 public class App {
     public static void main(String[] args) throws IOException {
-        final String secretMessage = "Steganography rules!";
-        final int messageLength = secretMessage.length();
+        final byte[] payload = "Steganography rules!".getBytes("UTF-8");
+        final int messageLength = payload.length;
 
-        final ImageSteganography encode = new ImageSteganography("images/1_Kyoto.png");
-        encode.encode("images/steganogram.png", secretMessage.getBytes("UTF-8"));
-
-        final ImageSteganography decode = new ImageSteganography("images/steganogram.png");
-        final byte[] decoded = decode.decode(messageLength);
+        ImageSteganography.encode(payload, "images/1_Kyoto.png", "images/steganogram.png");
+        final byte[] decoded = ImageSteganography.decode("images/steganogram.png", messageLength);
 
         System.out.printf("Decoded: %s%n", new String(decoded, "UTF-8"));
     }
