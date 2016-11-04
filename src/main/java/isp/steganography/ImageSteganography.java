@@ -1,11 +1,13 @@
 package isp.steganography;
 
+import javax.crypto.Cipher;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.Key;
 import java.util.Arrays;
 
 /**
@@ -44,6 +46,34 @@ public class ImageSteganography {
         ImageIO.write(image, "png", new File(outFile));
     }
 
+    public static void encryptEncode(final byte[] payload, final String inFile, final String outFile, final Key key) throws Exception {
+        // load the image
+        final BufferedImage image = loadImage(inFile);
+
+        final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
+        aes.init(Cipher.ENCRYPT_MODE, key);
+
+        final int finalPayloadSize = payload.length + 16 + 12;
+        aes.updateAAD(ByteBuffer.allocate(4).putInt(finalPayloadSize));
+        final byte[] ct = aes.doFinal(payload);
+        final byte[] iv = aes.getIV();
+
+        final byte[] actualPayload = ByteBuffer.allocate(4 + iv.length + ct.length)
+                .putInt(finalPayloadSize)
+                .put(iv)
+                .put(ct)
+                .array();
+
+        // Convert byte array to bit sequence (array of booleans)
+        final boolean[] bits = getBits(actualPayload);
+
+        // encode the bits into image
+        encode(bits, image);
+
+        // save the modified image into outFile
+        ImageIO.write(image, "png", new File(outFile));
+    }
+
     /**
      * Decodes the message from given filename
      *
@@ -54,8 +84,17 @@ public class ImageSteganography {
     public static byte[] decode(final String fileName) throws IOException {
         final BufferedImage image = loadImage(fileName);
 
-        // todo: 20
         final boolean[] bits = decode(image);
+
+        return Arrays.copyOfRange(getBytes(bits), 4, bits.length / 8);
+    }
+
+    public static byte[] decryptAndDecode(final String fileName, final Key key) throws Exception {
+        final BufferedImage image = loadImage(fileName);
+
+        boolean[] bits = decode(image);
+
+        bits = Arrays.copyOfRange(bits, 32, bits.length);
 
         final byte[] result = getBytes(bits);
 
@@ -132,8 +171,7 @@ public class ImageSteganography {
             }
         }
 
-        // return the bits array without the first 32 bits
-        return Arrays.copyOfRange(bits, 32, bits.length);
+        return bits;
     }
 
     /**
