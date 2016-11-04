@@ -5,6 +5,8 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * Assignments:
@@ -29,8 +31,11 @@ public class ImageSteganography {
         // load the image
         final BufferedImage image = loadImage(inFile);
 
+        final ByteBuffer buff = ByteBuffer.allocate(payload.length + 4);
+        buff.putInt(payload.length).put(payload);
+
         // Convert byte array to bit sequence (array of booleans)
-        final boolean[] bits = getBits(payload);
+        final boolean[] bits = getBits(buff.array());
 
         // encode the bits into image
         encode(bits, image);
@@ -43,14 +48,14 @@ public class ImageSteganography {
      * Decodes the message from given filename
      *
      * @param fileName The name of the file
-     * @param byteLen  The length of the message
      * @return The byte array of the decoded message
      * @throws IOException
      */
-    public static byte[] decode(final String fileName, final int byteLen) throws IOException {
+    public static byte[] decode(final String fileName) throws IOException {
         final BufferedImage image = loadImage(fileName);
 
-        final boolean[] bits = decode(image, byteLen);
+        // todo: 20
+        final boolean[] bits = decode(image);
 
         final byte[] result = getBytes(bits);
 
@@ -101,8 +106,9 @@ public class ImageSteganography {
         }
     }
 
-    protected static boolean[] decode(final BufferedImage image, final int byteLength) {
-        final boolean[] bits = new boolean[byteLength * 8];
+    protected static boolean[] decode(final BufferedImage image) {
+        int size = 32; // at first, ready only 4 bytes denoting the payload size
+        boolean[] bits = new boolean[size];
 
         for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < bits.length; i++) {
             for (int j = image.getMinY(); j < image.getHeight() && bitCounter < bits.length; j++) {
@@ -112,10 +118,22 @@ public class ImageSteganography {
                 final int lsb = red & 0x1;
                 bits[bitCounter] = !(lsb == 0);
                 bitCounter++;
+
+                if (bitCounter == 32) {
+                    // we've read the payload size
+                    final int newSize = ByteBuffer.wrap(getBytes(bits)).getInt();
+
+                    // increase the size of the bits array
+                    size += newSize * 8;
+                    boolean[] newBits = new boolean[size];
+                    System.arraycopy(bits, 0, newBits, 0, bits.length);
+                    bits = newBits;
+                }
             }
         }
 
-        return bits;
+        // return the bits array without the first 32 bits
+        return Arrays.copyOfRange(bits, 32, bits.length);
     }
 
     /**
