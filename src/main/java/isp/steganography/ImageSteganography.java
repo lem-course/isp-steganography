@@ -30,20 +30,23 @@ public class ImageSteganography {
     /**
      * Encodes given payload into the image and writes the image to file.
      *
-     * @param payload The payload to be encoded
+     * @param pt      The payload to be encoded
      * @param inFile  The filename of the cover image
      * @param outFile The filename of the steganogram
      * @throws IOException
      */
-    public static void encode(final byte[] payload, final String inFile, final String outFile) throws IOException {
+    public static void encode(final byte[] pt, final String inFile, final String outFile) throws IOException {
         // load the image
         final BufferedImage image = loadImage(inFile);
 
-        final ByteBuffer buff = ByteBuffer.allocate(payload.length + 4);
-        buff.putInt(payload.length).put(payload);
+        // extend the payload with its size
+        final byte[] payload = ByteBuffer.allocate(pt.length + 4)
+                .putInt(pt.length)
+                .put(pt)
+                .array();
 
         // Convert byte array to bit sequence (array of booleans)
-        final boolean[] bits = getBits(buff.array());
+        final boolean[] bits = getBits(payload);
 
         // encode the bits into image
         encode(bits, image);
@@ -60,11 +63,17 @@ public class ImageSteganography {
      * @throws IOException
      */
     public static byte[] decode(final String fileName) throws IOException {
+        // load the image
         final BufferedImage image = loadImage(fileName);
 
+        // read all LSBs
         final boolean[] bits = decode(image);
 
-        return Arrays.copyOfRange(getBytes(bits), 4, bits.length / 8);
+        // convert bits to bytes
+        final byte[] bytes = getBytes(bits);
+
+        // return bytes without the first four bytes (that denote the size)
+        return Arrays.copyOfRange(bytes, 4, bytes.length);
     }
 
     public static void encryptAndEncode(final byte[] pt, final String inFile, final String outFile, final Key key)
@@ -74,22 +83,18 @@ public class ImageSteganography {
         final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
         aes.init(Cipher.ENCRYPT_MODE, key);
 
-        final int finalPayloadSize = pt.length + 16 + 12;
+        // len(CT) = len(PT) + len(tag)
+        // len(payload) = len(CT) + len(IV)
+        final int finalPayloadSize = 12 + pt.length + 16;
         aes.updateAAD(ByteBuffer.allocate(4).putInt(finalPayloadSize));
         final byte[] ct = aes.doFinal(pt);
         final byte[] iv = aes.getIV();
 
-        // final byte[] payload = ByteBuffer.allocate(4 + iv.length + ct.length)
         final byte[] payload = ByteBuffer.allocate(4 + finalPayloadSize)
                 .putInt(finalPayloadSize)
                 .put(iv)
                 .put(ct)
                 .array();
-
-        System.out.printf("Si %d%n", finalPayloadSize);
-        System.out.printf("PT (%d): %s%n", pt.length, hex(pt));
-        System.out.printf("IV (%d): %s%n", iv.length, hex(iv));
-        System.out.printf("CT (%d): %s%n", ct.length, hex(ct));
 
         // Convert byte array to bit sequence (array of booleans)
         final boolean[] bits = getBits(payload);
@@ -116,15 +121,10 @@ public class ImageSteganography {
         final byte[] ct = new byte[size - 12];
         buff.get(ct);
 
-        System.out.printf("Si %d%n", size);
-        System.out.printf("IV (%d): %s%n", iv.length, hex(iv));
-        System.out.printf("CT (%d): %s%n", ct.length, hex(ct));
-
         final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
         aes.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
         aes.updateAAD(ByteBuffer.allocate(4).putInt(size));
         final byte[] pt = aes.doFinal(ct);
-        System.out.printf("PT (%d): %s%n", pt.length, hex(pt));
 
         return pt;
     }
