@@ -11,15 +11,18 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Key;
 import java.util.Arrays;
+import java.util.BitSet;
 
 /**
  * Assignments:
  * <p>
- * - E1. Modify implementation so that the receiver can read the size of the hidden message
- * from the first 32 bits of the steganogram. After parsing those 32 bits, process
- * the rest of steganogram accordingly.
- * - E2. Add security: Provide secrecy and integrity for the hidden message.
- * - E3. Use the remaining two color channels to enhance the capacity of the steganogram.
+ * 1. Change the encoding process, so that the first 4 bytes of the steganogram hold the
+ * length of the payload. Then modify the decoding process accordingly.
+ * 2. Add security: Provide secrecy and integrity for the hidden message. Use GCM for cipher.
+ * Also, use AEAD to provide integrity to the steganogram size.
+ * 3. Extra: Enhance the capacity of the carrier:
+ * -- Use the remaining two color channels;
+ * -- Use additional bits.
  */
 public class ImageSteganography {
 
@@ -28,12 +31,12 @@ public class ImageSteganography {
     }
 
     /**
-     * Encodes given payload into the image and writes the image to file.
+     * Encodes given payload into the cover image and saves the steganogram.
      *
      * @param pt      The payload to be encoded
      * @param inFile  The filename of the cover image
      * @param outFile The filename of the steganogram
-     * @throws IOException
+     * @throws IOException If the file does not exist, or the saving fails.
      */
     public static void encode(final byte[] pt, final String inFile, final String outFile) throws IOException {
         // load the image
@@ -45,37 +48,46 @@ public class ImageSteganography {
                 .put(pt)
                 .array();
 
-        // Convert byte array to bit sequence (array of booleans)
-        final boolean[] bits = getBits(payload);
+        // Convert byte array to bit sequence
+        final BitSet bits = BitSet.valueOf(payload);
 
         // encode the bits into image
         encode(bits, image);
 
         // save the modified image into outFile
-        ImageIO.write(image, "png", new File(outFile));
+        saveImage(outFile, image);
     }
 
     /**
-     * Decodes the message from given filename
+     * Decodes the message from given filename.
      *
      * @param fileName The name of the file
      * @return The byte array of the decoded message
-     * @throws IOException
+     * @throws IOException If the filename does not exist.
      */
     public static byte[] decode(final String fileName) throws IOException {
         // load the image
         final BufferedImage image = loadImage(fileName);
 
         // read all LSBs
-        final boolean[] bits = decode(image);
+        final BitSet bits = decode(image);
 
-        // convert bits to bytes
-        final byte[] bytes = getBytes(bits);
+        // convert them to bytes
+        final byte[] bytes = bits.toByteArray();
 
         // return bytes without the first four bytes (that denote the size)
         return Arrays.copyOfRange(bytes, 4, bytes.length);
     }
 
+    /**
+     * Encrypts and encodes given plain text into the cover image and then saves the steganogram.
+     *
+     * @param pt      The plaintext of the payload
+     * @param inFile  cover image filename
+     * @param outFile steganogram filename
+     * @param key     symmetric secret key
+     * @throws Exception
+     */
     public static void encryptAndEncode(final byte[] pt, final String inFile, final String outFile, final Key key)
             throws Exception {
         final BufferedImage image = loadImage(inFile);
@@ -97,19 +109,27 @@ public class ImageSteganography {
                 .array();
 
         // Convert byte array to bit sequence (array of booleans)
-        final boolean[] bits = getBits(payload);
+        final BitSet bits = BitSet.valueOf(payload);
 
         // encode the bits into image
         encode(bits, image);
 
         // save the modified image into outFile
-        ImageIO.write(image, "png", new File(outFile));
+        saveImage(outFile, image);
     }
 
+    /**
+     * Decrypts and then decodes the message from the steganogram.
+     *
+     * @param fileName name of the steganogram
+     * @param key      symmetric secret key
+     * @return plaintext of the decoded message
+     * @throws Exception
+     */
     public static byte[] decryptAndDecode(final String fileName, final Key key) throws Exception {
         final BufferedImage image = loadImage(fileName);
 
-        final byte[] bytes = getBytes(decode(image));
+        final byte[] bytes = decode(image).toByteArray();
 
         final ByteBuffer buff = ByteBuffer.wrap(bytes);
 
@@ -124,22 +144,29 @@ public class ImageSteganography {
         final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
         aes.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
         aes.updateAAD(ByteBuffer.allocate(4).putInt(size));
-        final byte[] pt = aes.doFinal(ct);
-
-        return pt;
+        return aes.doFinal(ct);
     }
 
     /**
      * Loads an image from given filename and returns an instance of the BufferedImage
-     * <p>
-     * The file has to be located in src/main/resources directory.
      *
-     * @param inFile
-     * @return
+     * @param inFile filename of the image
+     * @return image
      * @throws IOException If file does not exist
      */
     protected static BufferedImage loadImage(final String inFile) throws IOException {
         return ImageIO.read(new File(inFile));
+    }
+
+    /**
+     * Saves given image into file
+     *
+     * @param outFile image filename
+     * @param image   image to be saved
+     * @throws IOException If an error occurs while writing to file
+     */
+    protected static void saveImage(String outFile, BufferedImage image) throws IOException {
+        ImageIO.write(image, "png", new File(outFile));
     }
 
     /**
@@ -149,13 +176,13 @@ public class ImageSteganography {
      * @param payload The array of bits
      * @param image   The image onto which the payload is to be encoded
      */
-    protected static void encode(final boolean[] payload, final BufferedImage image) {
-        for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < payload.length; i++) {
-            for (int j = image.getMinY(); j < image.getHeight() && bitCounter < payload.length; j++) {
-                final Color original = new Color(image.getRGB(i, j));
+    protected static void encode(final BitSet payload, final BufferedImage image) {
+        for (int x = image.getMinX(), bitCounter = 0; x < image.getWidth() && bitCounter < payload.size(); x++) {
+            for (int y = image.getMinY(); y < image.getHeight() && bitCounter < payload.size(); y++) {
+                final Color original = new Color(image.getRGB(x, y));
 
                 // Let's modify the red component only
-                final int newRed = payload[bitCounter] ?
+                final int newRed = payload.get(bitCounter) ?
                         original.getRed() | 0x01 : // sets LSB to 1
                         original.getRed() & 0xfe;  // sets LSB to 0
 
@@ -163,7 +190,7 @@ public class ImageSteganography {
                 final Color modified = new Color(newRed, original.getGreen(), original.getBlue());
 
                 // Replace the current pixel with the new color
-                image.setRGB(i, j, modified.getRGB());
+                image.setRGB(x, y, modified.getRGB());
 
                 // Uncomment to see changes in the RGB components
                 // System.out.printf("%03d bit [%d, %d]: %s -> %s%n", bitCounter, i, j, original, modified);
@@ -173,75 +200,33 @@ public class ImageSteganography {
         }
     }
 
-    protected static boolean[] decode(final BufferedImage image) {
-        int size = 32; // at first, ready only 4 bytes denoting the payload size
-        boolean[] bits = new boolean[size];
+    /**
+     * Decodes the message from the steganogram
+     *
+     * @param image steganogram
+     * @return {@link BitSet} instance representing the sequence of read bits
+     */
+    protected static BitSet decode(final BufferedImage image) {
+        int size = 32; // at first, ready only 32 bits (4 bytes) denoting the payload size
+        final BitSet bits = new BitSet(size);
 
-        for (int i = image.getMinX(), bitCounter = 0; i < image.getWidth() && bitCounter < bits.length; i++) {
-            for (int j = image.getMinY(); j < image.getHeight() && bitCounter < bits.length; j++) {
-                final Color color = new Color(image.getRGB(i, j));
-                final int red = color.getRed();
-
-                final int lsb = red & 0x1;
-                bits[bitCounter] = !(lsb == 0);
+        for (int x = image.getMinX(), bitCounter = 0; x < image.getWidth() && bitCounter < size; x++) {
+            for (int y = image.getMinY(); y < image.getHeight() && bitCounter < size; y++) {
+                final Color color = new Color(image.getRGB(x, y));
+                final int lsb = color.getRed() & 0x1;
+                bits.set(bitCounter, !(lsb == 0));
                 bitCounter++;
 
                 if (bitCounter == 32) {
                     // we've read the payload size
-                    final int newSize = ByteBuffer.wrap(getBytes(bits)).getInt();
+                    final int newSize = ByteBuffer.wrap(bits.toByteArray()).getInt();
 
-                    // increase the size of the bits array
+                    // increase the number of bits to read
                     size += newSize * 8;
-                    boolean[] newBits = new boolean[size];
-                    System.arraycopy(bits, 0, newBits, 0, bits.length);
-                    bits = newBits;
                 }
             }
         }
 
         return bits;
-    }
-
-    /**
-     * Converts an array of bytes it into an array of bits (booleans)
-     *
-     * @param bytes array of bytes
-     * @return array of bits
-     */
-    protected static boolean[] getBits(final byte[] bytes) {
-        final boolean[] bits = new boolean[bytes.length * 8];
-
-        for (int i = 0, bitCounter = 0; i < bytes.length; i++) {
-            for (int j = 0; j < 8; j++) {
-                bits[bitCounter] = (bytes[i] & (0x01 << j)) != 0;
-                bitCounter++;
-            }
-        }
-
-        return bits;
-    }
-
-    /**
-     * Converts an array of bits (booleans) into an array of bytes
-     *
-     * @param bits array of bits
-     * @return array of bytes
-     */
-    protected static byte[] getBytes(boolean[] bits) {
-        final byte[] bytes = new byte[bits.length / 8];
-
-        for (int byteIndex = 0; byteIndex < bytes.length; byteIndex++) {
-            byte byte_ = 0;
-
-            for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
-                byte_ |= (bits[8 * byteIndex + bitIndex] ?
-                        (byte) 0x01 :
-                        (byte) 0x00) << bitIndex;
-            }
-
-            bytes[byteIndex] = byte_;
-        }
-
-        return bytes;
     }
 }
