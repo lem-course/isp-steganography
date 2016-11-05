@@ -44,8 +44,10 @@ public class GCMExample {
 
         // decrypt
         final Cipher bob = Cipher.getInstance("AES/GCM/NoPadding");
-        // the length of the IV is 16 bytes (128 bits)
-        bob.init(Cipher.DECRYPT_MODE, sharedKey, new GCMParameterSpec(128, iv));
+        // the length of the MAC tag is either 128, 120, 112, 104 or 96 bits
+        // the default is 128 bits
+        final GCMParameterSpec specs = new GCMParameterSpec(128, iv);
+        bob.init(Cipher.DECRYPT_MODE, sharedKey, specs);
         final byte[] pt2 = bob.doFinal(ct);
         System.out.printf("PT:  %s%n", hex(pt2));
         System.out.printf("MSG: %s%n", new String(pt2, "UTF-8"));
