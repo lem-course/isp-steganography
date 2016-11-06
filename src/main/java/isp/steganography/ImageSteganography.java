@@ -1,16 +1,12 @@
 package isp.steganography;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
 import javax.imageio.ImageIO;
 import javax.xml.bind.DatatypeConverter;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.security.Key;
-import java.util.Arrays;
 import java.util.BitSet;
 
 /**
@@ -42,14 +38,8 @@ public class ImageSteganography {
         // load the image
         final BufferedImage image = loadImage(inFile);
 
-        // extend the payload with its size
-        final byte[] payload = ByteBuffer.allocate(pt.length + 4)
-                .putInt(pt.length)
-                .put(pt)
-                .array();
-
         // Convert byte array to bit sequence
-        final BitSet bits = BitSet.valueOf(payload);
+        final BitSet bits = BitSet.valueOf(pt);
 
         // encode the bits into image
         encode(bits, image);
@@ -65,18 +55,15 @@ public class ImageSteganography {
      * @return The byte array of the decoded message
      * @throws IOException If the filename does not exist.
      */
-    public static byte[] decode(final String fileName) throws IOException {
+    public static byte[] decode(final String fileName, int size) throws IOException {
         // load the image
         final BufferedImage image = loadImage(fileName);
 
         // read all LSBs
-        final BitSet bits = decode(image);
+        final BitSet bits = decode(image, size);
 
         // convert them to bytes
-        final byte[] bytes = bits.toByteArray();
-
-        // return bytes without the first four bytes (that denote the size)
-        return Arrays.copyOfRange(bytes, 4, bytes.length);
+        return bits.toByteArray();
     }
 
     /**
@@ -90,32 +77,7 @@ public class ImageSteganography {
      */
     public static void encryptAndEncode(final byte[] pt, final String inFile, final String outFile, final Key key)
             throws Exception {
-        final BufferedImage image = loadImage(inFile);
-
-        final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
-        aes.init(Cipher.ENCRYPT_MODE, key);
-
-        // len(CT) = len(PT) + len(tag)
-        // len(payload) = len(CT) + len(IV)
-        final int finalPayloadSize = 12 + pt.length + 16;
-        aes.updateAAD(ByteBuffer.allocate(4).putInt(finalPayloadSize));
-        final byte[] ct = aes.doFinal(pt);
-        final byte[] iv = aes.getIV();
-
-        final byte[] payload = ByteBuffer.allocate(4 + finalPayloadSize)
-                .putInt(finalPayloadSize)
-                .put(iv)
-                .put(ct)
-                .array();
-
-        // Convert byte array to bit sequence (array of booleans)
-        final BitSet bits = BitSet.valueOf(payload);
-
-        // encode the bits into image
-        encode(bits, image);
-
-        // save the modified image into outFile
-        saveImage(outFile, image);
+        // TODO
     }
 
     /**
@@ -127,24 +89,8 @@ public class ImageSteganography {
      * @throws Exception
      */
     public static byte[] decryptAndDecode(final String fileName, final Key key) throws Exception {
-        final BufferedImage image = loadImage(fileName);
-
-        final byte[] bytes = decode(image).toByteArray();
-
-        final ByteBuffer buff = ByteBuffer.wrap(bytes);
-
-        final int size = buff.getInt();
-
-        final byte[] iv = new byte[12];
-        buff.get(iv);
-
-        final byte[] ct = new byte[size - 12];
-        buff.get(ct);
-
-        final Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
-        aes.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
-        aes.updateAAD(ByteBuffer.allocate(4).putInt(size));
-        return aes.doFinal(ct);
+        // TODO
+        return null;
     }
 
     /**
@@ -204,26 +150,19 @@ public class ImageSteganography {
      * Decodes the message from the steganogram
      *
      * @param image steganogram
+     * @param size  the size of the encoded steganogram
      * @return {@link BitSet} instance representing the sequence of read bits
      */
-    protected static BitSet decode(final BufferedImage image) {
-        int size = 32; // at first, ready only 32 bits (4 bytes) denoting the payload size
-        final BitSet bits = new BitSet(size);
+    protected static BitSet decode(final BufferedImage image, int size) {
+        final BitSet bits = new BitSet();
+        final int sizeBits = 8 * size;
 
-        for (int x = image.getMinX(), bitCounter = 0; x < image.getWidth() && bitCounter < size; x++) {
-            for (int y = image.getMinY(); y < image.getHeight() && bitCounter < size; y++) {
+        for (int x = image.getMinX(), bitCounter = 0; x < image.getWidth() && bitCounter < sizeBits; x++) {
+            for (int y = image.getMinY(); y < image.getHeight() && bitCounter < sizeBits; y++) {
                 final Color color = new Color(image.getRGB(x, y));
                 final int lsb = color.getRed() & 0x1;
                 bits.set(bitCounter, !(lsb == 0));
                 bitCounter++;
-
-                if (bitCounter == 32) {
-                    // we've read the payload size
-                    final int newSize = ByteBuffer.wrap(bits.toByteArray()).getInt();
-
-                    // increase the number of bits to read
-                    size += newSize * 8;
-                }
             }
         }
 
