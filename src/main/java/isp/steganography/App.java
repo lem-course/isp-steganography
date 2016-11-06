@@ -1,28 +1,20 @@
 package isp.steganography;
 
 import javax.crypto.KeyGenerator;
-import java.io.IOException;
-import java.security.Key;
-import java.security.NoSuchAlgorithmException;
+import javax.crypto.SecretKey;
 
 public class App {
-    public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
-        final String secretMessage = "Steganography rules!";
+    public static void main(String[] args) throws Exception {
+        final byte[] payload = "My secret message".getBytes("UTF-8");
 
-        final ImageSteganography encoder = new ImageSteganography("images/1_Kyoto.png");
-        encoder.doEncode("images/steganogram.png", secretMessage.getBytes("UTF-8"));
+        ImageSteganography.encode(payload, "images/1_Kyoto.png", "images/steganogram.png");
+        final byte[] decoded1 = ImageSteganography.decode("images/steganogram.png");
+        System.out.printf("Decoded: %s%n", new String(decoded1, "UTF-8"));
 
-        final ImageSteganography decoder = new ImageSteganography("images/steganogram.png");
-        final byte[] decoded = decoder.decode();
-        System.out.println(new String(decoded, "UTF-8"));
+        final SecretKey key = KeyGenerator.getInstance("AES").generateKey();
+        ImageSteganography.encryptAndEncode(payload, "images/2_Morondava.png", "images/steganogram-encrypted.png", key);
+        final byte[] decoded2 = ImageSteganography.decryptAndDecode("images/steganogram-encrypted.png", key);
 
-        final Key key = KeyGenerator.getInstance("AES").generateKey();
-
-        final ImageSteganography encodeAndEncrypt = new ImageSteganography("images/1_Kyoto.png", key);
-        encodeAndEncrypt.encode("images/steganogram2.png", secretMessage.getBytes("UTF-8"));
-
-        final ImageSteganography decodeAndDecrypt = new ImageSteganography("images/steganogram2.png", key);
-        final byte[] decodedAndDecrypted = decodeAndDecrypt.decode();
-        System.out.printf("Decoded and decrypted: %s%n", new String(decodedAndDecrypted, "UTF-8"));
+        System.out.printf("Decoded: %s%n", new String(decoded2, "UTF-8"));
     }
 }
