@@ -1,6 +1,8 @@
 package isp.steganography;
 
 import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.imageio.ImageIO;
 import javax.xml.bind.DatatypeConverter;
@@ -26,7 +28,21 @@ import java.util.BitSet;
  */
 public class ImageSteganography {
 
-    public static String hex(byte[] data) {
+    public static void main(String[] args) throws Exception {
+        final byte[] payload = "My secret message".getBytes("UTF-8");
+
+        ImageSteganography.encode(payload, "images/1_Kyoto.png", "images/steganogram.png");
+        final byte[] decoded1 = ImageSteganography.decode("images/steganogram.png");
+        System.out.printf("Decoded: %s%n", new String(decoded1, "UTF-8"));
+
+        final SecretKey key = KeyGenerator.getInstance("AES").generateKey();
+        ImageSteganography.encryptAndEncode(payload, "images/2_Morondava.png", "images/steganogram-encrypted.png", key);
+        final byte[] decoded2 = ImageSteganography.decryptAndDecode("images/steganogram-encrypted.png", key);
+
+        System.out.printf("Decoded: %s%n", new String(decoded2, "UTF-8"));
+    }
+
+    protected static String hex(byte[] data) {
         return DatatypeConverter.printHexBinary(data);
     }
 
@@ -170,10 +186,10 @@ public class ImageSteganography {
     }
 
     /**
-     * Encodes given array of bits into given image. The algorithm modifies the
-     * least significant bit in the red component of each image pixel.
+     * Encodes bits into image. The algorithm modifies the least significant bit
+     * of the red RGB component in each pixel.
      *
-     * @param payload The array of bits
+     * @param payload Bits to be encoded
      * @param image   The image onto which the payload is to be encoded
      */
     protected static void encode(final BitSet payload, final BufferedImage image) {
@@ -213,8 +229,8 @@ public class ImageSteganography {
         for (int x = image.getMinX(), bitCounter = 0; x < image.getWidth() && bitCounter < size; x++) {
             for (int y = image.getMinY(); y < image.getHeight() && bitCounter < size; y++) {
                 final Color color = new Color(image.getRGB(x, y));
-                final int lsb = color.getRed() & 0x1;
-                bits.set(bitCounter, !(lsb == 0));
+                final int lsb = color.getRed() & 0x01;
+                bits.set(bitCounter, lsb == 0x01);
                 bitCounter++;
 
                 if (bitCounter == 32) {
