@@ -26,14 +26,22 @@ public class ImageSteganography {
         final byte[] payload = "My secret message".getBytes("UTF-8");
 
         ImageSteganography.encode(payload, "images/1_Kyoto.png", "images/steganogram.png");
-        final byte[] decoded1 = ImageSteganography.decode("images/steganogram.png", payload.length);
-        System.out.printf("Decoded: %s%n", new String(decoded1, "UTF-8"));
+        final byte[] decoded = ImageSteganography.decode("images/steganogram.png", payload.length);
+        System.out.printf("Decoded: %s%n", new String(decoded, "UTF-8"));
 
-        /*final SecretKey key = KeyGenerator.getInstance("AES").generateKey();
+        /*
+        TODO: Assignment 1
+        ImageSteganography.encode(payload, "images/1_Kyoto.png", "images/steganogram.png");
+        final byte[] decoded1 = ImageSteganography.decode("images/steganogram.png");
+        System.out.printf("Decoded: %s%n", new String(decoded1, "UTF-8"));*/
+
+        /*
+        TODO: Assignment 2
+        final SecretKey key = KeyGenerator.getInstance("AES").generateKey();
         ImageSteganography.encryptAndEncode(payload, "images/2_Morondava.png", "images/steganogram-encrypted.png", key);
         final byte[] decoded2 = ImageSteganography.decryptAndDecode("images/steganogram-encrypted.png", key);
 
-        System.out.printf("Decoded: %s%n", new String(decoded2, "UTF-8"));*/
+        System.out.printf("Decoded: %s%n", new String(decoded2, "UTF-8")); */
     }
 
     protected static String hex(byte[] data) {
