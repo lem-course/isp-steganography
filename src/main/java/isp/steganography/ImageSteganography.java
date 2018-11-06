@@ -6,6 +6,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.BitSet;
 
@@ -23,11 +24,11 @@ import java.util.BitSet;
 public class ImageSteganography {
 
     public static void main(String[] args) throws Exception {
-        final byte[] payload = "My secret message".getBytes("UTF-8");
+        final byte[] payload = "My secret message".getBytes(StandardCharsets.UTF_8);
 
         ImageSteganography.encode(payload, "images/1_Kyoto.png", "images/steganogram.png");
         final byte[] decoded = ImageSteganography.decode("images/steganogram.png", payload.length);
-        System.out.printf("Decoded: %s%n", new String(decoded, "UTF-8"));
+        System.out.printf("Decoded: %s%n", new String(decoded, StandardCharsets.UTF_8));
 
         /*
         TODO: Assignment 1
@@ -42,10 +43,6 @@ public class ImageSteganography {
         final byte[] decoded2 = ImageSteganography.decryptAndDecode("images/steganogram-encrypted.png", key);
 
         System.out.printf("Decoded: %s%n", new String(decoded2, "UTF-8")); */
-    }
-
-    protected static String hex(byte[] data) {
-        return DatatypeConverter.printHexBinary(data);
     }
 
     /**
