@@ -17,10 +17,10 @@ public class RSAExample {
 
     public static void main(String[] args) throws Exception {
         // Set RSA cipher specs:
-        //  - Set mode to ECB: this is an nonsensical value, but is enforced by the underlying Java API
-        //    (it is merely an implementation quirk -- otherwise you'd get an exception)
-        //  - Set padding to OAEP (preferred mode); alternatives are PKCS1Padding (the default)  and NoPadding
-        final String algorithm = "RSA/ECB/NoPadding";
+        //  - Set mode to ECB: each block is encrypted independently
+        //  - Set padding to OAEP (preferred mode);
+        //    alternatives are PKCS1Padding (the default) and NoPadding ("textbook" RSA)
+        final String algorithm = "RSA/ECB/OAEPPadding";
         final String message = "I would like to keep this text confidential, Bob. Kind regards, Alice.";
         final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
 
