@@ -16,7 +16,7 @@ import java.util.BitSet;
  * length of the payload. Then modify the decoding process accordingly.
  * 2. Add security: Provide secrecy and integrity for the hidden message. Use GCM for cipher.
  * Also, use AEAD to provide integrity to the steganogram size.
- * 3. Extra: Enhance the capacity of the carrier:
+ * 3. Optional: Enhance the capacity of the carrier:
  * -- Use the remaining two color channels;
  * -- Use additional bits.
  */
@@ -60,7 +60,7 @@ public class ImageSteganography {
         final BitSet bits = BitSet.valueOf(pt);
 
         // encode the bits into image
-        encode(bits, image);
+        encodeBits(bits, image);
 
         // save the modified image into outFile
         saveImage(outFile, image);
@@ -78,7 +78,7 @@ public class ImageSteganography {
         final BufferedImage image = loadImage(fileName);
 
         // read all LSBs
-        final BitSet bits = decode(image, size);
+        final BitSet bits = decodeBits(image, size);
 
         // convert them to bytes
         return bits.toByteArray();
@@ -140,7 +140,7 @@ public class ImageSteganography {
      * @param payload Bits to be encoded
      * @param image   The image onto which the payload is to be encoded
      */
-    protected static void encode(final BitSet payload, final BufferedImage image) {
+    protected static void encodeBits(final BitSet payload, final BufferedImage image) {
         for (int x = image.getMinX(), bitCounter = 0; x < image.getWidth() && bitCounter < payload.size(); x++) {
             for (int y = image.getMinY(); y < image.getHeight() && bitCounter < payload.size(); y++) {
                 final Color original = new Color(image.getRGB(x, y));
@@ -157,7 +157,7 @@ public class ImageSteganography {
                 image.setRGB(x, y, modified.getRGB());
 
                 // Uncomment to see changes in the RGB components
-                // System.out.printf("%03d bit [%d, %d]: %s -> %s%n", bitCounter, i, j, original, modified);
+                // System.out.printf("%03d bit [%d, %d]: %s -> %s%n", bitCounter, x, y, original, modified);
 
                 bitCounter++;
             }
@@ -171,7 +171,7 @@ public class ImageSteganography {
      * @param size  the size of the encoded steganogram
      * @return {@link BitSet} instance representing the sequence of read bits
      */
-    protected static BitSet decode(final BufferedImage image, int size) {
+    protected static BitSet decodeBits(final BufferedImage image, int size) {
         final BitSet bits = new BitSet();
         final int sizeBits = 8 * size;
 

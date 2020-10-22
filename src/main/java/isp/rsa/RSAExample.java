@@ -8,20 +8,18 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 
 /**
- * Assignments:
- * - Find out how to manually change the RSA modulus size
- * - Set padding to NoPadding. Encrypt a message and decrypt it. Is the
+ * - Try to set the RSA modulus size manually
+ * - Try setting padding to NoPadding. Encrypt a message and decrypt it. Is the
  * decrypted text the same as the original plaint text? Why?
  */
 public class RSAExample {
-
     public static void main(String[] args) throws Exception {
         // Set RSA cipher specs:
         //  - Set mode to ECB: each block is encrypted independently
         //  - Set padding to OAEP (preferred mode);
         //    alternatives are PKCS1Padding (the default) and NoPadding ("textbook" RSA)
         final String algorithm = "RSA/ECB/OAEPPadding";
-        final String message = "I would like to keep this text confidential, Bob. Kind regards, Alice.";
+        final String message = "A test message.";
         final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
 
         System.out.println("Message: " + message);
